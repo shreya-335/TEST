@@ -50,11 +50,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Navigation Helpers ---
   void _onBottomNavTapped(int index) {
-    // 0: Home (Current), 1: Advisory, 2: Community, 3: Claims, 4: Finance
+    // 0: Home, 1: Advisory, 2: Community, 3: Claims, 4: Finance, 5: CCE (New)
     switch (index) {
       case 0:
-        // Already on Home
-        break;
+        break; // Home
       case 1:
         context.push('/advisory');
         break;
@@ -62,12 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
         context.push('/community');
         break;
       case 3:
-        // Assuming route exists or showing placeholder
-        // context.push('/file-claim'); 
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Claims feature coming soon")));
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Claims feature coming soon")));
         break;
       case 4:
         context.push('/finance');
+        break;
+      case 5:
+        context.push('/cce-tasks'); // Navigate to CCE Task List
         break;
     }
   }
@@ -82,12 +82,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      // Extend body behind app bar/status bar for the background image effect
       extendBodyBehindAppBar: true,
-      backgroundColor: const Color(0xFFF2F2F2), // Light grey background like the image bottom
+      backgroundColor: const Color(0xFFF2F2F2), 
       body: Stack(
         children: [
           // --- 1. Top Background Image ---
@@ -95,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
             top: 0,
             left: 0,
             right: 0,
-            height: 350, // Height of the background area
+            height: 350,
             child: Container(
               decoration: BoxDecoration(
                 image: DecorationImage(
@@ -104,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               child: Container(
-                // Gradient overlay to make text readable
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -112,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     colors: [
                       Colors.black.withOpacity(0.3),
                       Colors.black.withOpacity(0.1),
-                      const Color(0xFFF2F2F2), // Fade into background color
+                      const Color(0xFFF2F2F2),
                     ],
                   ),
                 ),
@@ -131,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     const SizedBox(height: 10),
                     
-                    // --- Header (Greeting & Notification) ---
+                    // --- Header ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -139,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                              CircleAvatar(
                               radius: 22,
-                              backgroundImage: AssetImage(_wheatImage), // Using requested image
+                              backgroundImage: AssetImage(_wheatImage),
                             ),
                             const SizedBox(width: 12),
                             Column(
@@ -175,15 +172,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     const SizedBox(height: 24),
-
-                    // --- Weather Widget (Glassmorphism) ---
                     _buildGlassWeatherCard(l10n),
-
                     const SizedBox(height: 20),
-
-                    // --- Proactive Alert System (Matches Image) ---
                     _buildProactiveAlerts(l10n),
-
                     const SizedBox(height: 24),
 
                     // --- "Our agriculture field" Header ---
@@ -194,7 +185,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           "Our agriculture field",
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
                         ),
-                        // "View Map" button (Functionally Add Farm)
                         ElevatedButton(
                           onPressed: () async {
                             if (!mounted || !context.mounted) return;
@@ -204,13 +194,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4C6646), // Dark Green from image
+                            backgroundColor: const Color(0xFF4C6646),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             elevation: 0,
                           ),
                           child: Text(
-                            l10n.translate('add_new'), // Using "Add New" loc string
+                            l10n.translate('add_new'),
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                           ),
                         ),
@@ -239,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: farms.length,
-                          padding: const EdgeInsets.only(bottom: 100), // Space for bottom nav
+                          padding: const EdgeInsets.only(bottom: 100), 
                           itemBuilder: (ctx, index) => _buildFarmCard(context, farms[index], l10n),
                         );
                       },
@@ -288,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.all(20),
-          color: Colors.white.withOpacity(0.15), // Glass effect
+          color: Colors.white.withOpacity(0.15),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -346,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          color: Colors.white.withOpacity(0.4), // Slightly more opaque
+          color: Colors.white.withOpacity(0.4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -365,19 +355,9 @@ class _HomeScreenState extends State<HomeScreen> {
                  scrollDirection: Axis.horizontal,
                  child: Row(
                    children: [
-                     _buildAlertCard(
-                       "Weather Alert", 
-                       "Heavy Rain imminent", 
-                       "Action Required", 
-                       Colors.grey.shade300
-                     ),
+                     _buildAlertCard("Weather Alert", "Heavy Rain imminent", "Action Required", Colors.grey.shade300),
                      const SizedBox(width: 12),
-                     _buildAlertCard(
-                       "Pest Outbreak", 
-                       "Aphids detected in Field B", 
-                       "View Details", 
-                       Colors.green.shade100
-                     ),
+                     _buildAlertCard("Pest Outbreak", "Aphids detected in Field B", "View Details", Colors.green.shade100),
                    ],
                  ),
                )
@@ -437,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F4F2), // Slightly off-white/beige from image
+          color: const Color(0xFFF7F4F2),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2)),
@@ -445,7 +425,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
-            // Farm Image
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.asset(
@@ -456,7 +435,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(width: 16),
-            // Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,7 +455,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            // Menu Icon
             Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
           ],
         ),
@@ -495,21 +472,21 @@ class _HomeScreenState extends State<HomeScreen> {
           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
         ]
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), // Adjusted padding
       child: SafeArea(
         top: false,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceAround, // Space evenly
           children: [
             _buildNavIcon(Icons.home_filled, "Home", 0, isActive: true),
             _buildNavIcon(Icons.spa_outlined, "Advisory", 1),
             // Central Camera Button (Community/Scan)
             GestureDetector(
-               onTap: () => _onBottomNavTapped(2), // Community
+               onTap: () => _onBottomNavTapped(2), 
                child: Container(
-                 width: 50, height: 50,
+                 width: 45, height: 45, // Slightly smaller
                  decoration: BoxDecoration(
-                   color: const Color(0xFF4C6646), // Dark green
+                   color: const Color(0xFF4C6646), 
                    shape: BoxShape.circle,
                    boxShadow: [
                      BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
@@ -519,30 +496,30 @@ class _HomeScreenState extends State<HomeScreen> {
                ),
             ),
             _buildNavIcon(Icons.description_outlined, "Claims", 3),
-            _buildNavIcon(Icons.account_balance_wallet_outlined, "Finance", 4), // Changed to person/finance
+            _buildNavIcon(Icons.account_balance_wallet_outlined, "Finance", 4),
+            
+            // --- CCE MODE BUTTON ---
+            _buildNavIcon(Icons.assignment, "CCE Mode", 5, isActive: false, color: Colors.blueAccent),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavIcon(IconData icon, String label, int index, {bool isActive = false}) {
+  Widget _buildNavIcon(IconData icon, String label, int index, {bool isActive = false, Color? color}) {
+    final finalColor = color ?? (isActive ? const Color(0xFF4C6646) : Colors.grey);
     return GestureDetector(
       onTap: () => _onBottomNavTapped(index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon, 
-            color: isActive ? const Color(0xFF4C6646) : Colors.grey, 
-            size: 24
-          ),
+          Icon(icon, color: finalColor, size: 24),
           const SizedBox(height: 4),
           Text(
             label, 
             style: TextStyle(
-              color: isActive ? const Color(0xFF4C6646) : Colors.grey, 
-              fontSize: 10,
+              color: finalColor, 
+              fontSize: 9, // Slightly smaller font to fit 6 items
               fontWeight: isActive ? FontWeight.bold : FontWeight.normal
             )
           )

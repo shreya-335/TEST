@@ -1,12 +1,21 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart'; // Required for GPS Verification
 import '../../api/api_client.dart';
 import '../../data/capture_data.dart';
-import '../../services/ml_service.dart'; // Import MLService
+import '../../models/sampling_session.dart';
+import '../../services/ml_service.dart'; // From File 2 (Blur Detection)
 
 class BlockCameraScreen extends StatefulWidget {
-  const BlockCameraScreen({super.key});
+  final SamplingBlock block;
+  final String sessionId;
+
+  const BlockCameraScreen({
+    super.key, 
+    required this.block, 
+    required this.sessionId
+  });
 
   @override
   State<BlockCameraScreen> createState() => _BlockCameraScreenState();
@@ -27,19 +36,22 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
 
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
+    // Use high resolution for ML analysis
     _controller = CameraController(cameras.first, ResolutionPreset.high, enableAudio: false);
     await _controller!.initialize();
     if(mounted) setState(() {});
   }
 
-  Future<void> _takePhoto() async {
+  Future<void> _captureAndUpload() async {
     if (_controller == null || _isProcessing) return;
     setState(() => _isProcessing = true);
 
     try {
+      // 1. Capture Image
       final image = await _controller!.takePicture();
 
-      // --- BLUR DETECTION ADDED HERE ---
+      // 2. Blur Check (Feature from File 2)
+      // We check this locally before wasting bandwidth on upload
       bool isBlurry = await MLService().isBlurry(image.path);
       if (isBlurry) {
         if (mounted) {
@@ -51,46 +63,60 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
           );
         }
         setState(() => _isProcessing = false);
-        return; // Stop execution if blurry
+        return; // Stop execution
       }
-      // ---------------------------------
 
-      // Create a minimal CaptureData and call presignUpload immediately.
-      // NOTE: Replace captureLat/captureLon with real GPS when available.
+      // 3. Get GPS Location (Feature from File 1)
+      // Critical for backend verification (Geofencing)
+      final LocationSettings settings = const LocationSettings(accuracy: LocationAccuracy.high);
+      final position = await Geolocator.getCurrentPosition(locationSettings: settings);
+
+      // 4. Prepare Data Object
       final capture = CaptureData(
         photoFile: image,
-        captureLat: 0.0,
-        captureLon: 0.0,
-        exifLat: null,
+        captureLat: position.latitude,
+        captureLon: position.longitude,
+        exifLat: null, // API handles extraction if needed, or we rely on captureLat
         exifLon: null,
         exifTimestamp: null,
       );
 
-      try {
-        final presign = await ApiClient().presignUpload(capture);
-        // Persist returned IDs on the CaptureData for later upload
-        if (presign is Map<String, dynamic>) {
-          capture.uploadId = presign['uploadId']?.toString();
-          capture.signedUploadParams = presign['uploadParams'] is Map ? Map<String, dynamic>.from(presign['uploadParams']) : null;
+      // 5. Pre-sign Upload (Backend Integration)
+      // Links this specific photo to the Session and Block ID
+      final presign = await ApiClient().presignUpload(
+        capture,
+        deviceMeta: {
+          "sessionBlockId": widget.block.gridBlockId ?? widget.block.id, // Use DB ID
+          "sessionId": widget.sessionId,
+          "blockId": widget.block.id,
+          "step": _currentStep.name, // Track if this is field or crop view
         }
-      } catch (e) {
-        // Ignore presign failure here but log and continue UI flow
-      }
+      );
+
+      capture.uploadId = presign['uploadId']?.toString();
+      capture.signedUploadParams = presign['upload'] ?? presign['uploadParams'];
+
+      // 6. Direct Upload to Cloudinary
+      final cloudinaryRes = await ApiClient().uploadToCloudinary(capture.photoFile, capture.signedUploadParams!);
+      
+      // 7. Complete Transaction on Backend
+      await ApiClient().completeUpload(capture, cloudinaryRes['public_id'], cloudinaryRes['secure_url']);
+
+      // 8. Handle Success / Transition
       if (_currentStep == CaptureStep.fieldView) {
-        // Transition to Step 2
         setState(() {
           _currentStep = CaptureStep.cropView;
           _isProcessing = false;
         });
       } else {
-        // Finish
         if(mounted) {
-           context.pop(true); // Return 'true' to Map Screen
+            context.pop(true); // Return 'true' to Map Screen to mark block as done
         }
       }
+
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload Failed: $e")));
       }
       setState(() => _isProcessing = false);
     }
@@ -99,7 +125,7 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
   @override
   Widget build(BuildContext context) {
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
     }
 
     bool isFieldView = _currentStep == CaptureStep.fieldView;
@@ -108,20 +134,19 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Camera Feed
+          // Camera Preview
           Center(child: CameraPreview(_controller!)),
-
-          // 2. The Ghost Overlay (Hole Punch)
+          
+          // Ghost Overlay (Hole Punch)
           CustomPaint(
-            size: Size.infinite,
+            size: Size.infinite, 
             painter: HolePunchPainter(
-              // If Field View: Wide Rectangle. If Crop View: Small Square.
-              holeSize: isFieldView ? const Size(350, 200) : const Size(200, 200),
-              borderRadius: 12,
-            ),
+                holeSize: isFieldView ? const Size(350, 200) : const Size(200, 200), 
+                borderRadius: 12
+            )
           ),
-
-          // 3. Instructions & Controls
+          
+          // Instructions & Controls
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
@@ -130,24 +155,24 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
               child: Column(
                 children: [
                   Text(
-                    isFieldView ? "STEP 1: FIELD VIEW" : "STEP 2: CROP VIEW",
-                    style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 18),
+                      isFieldView ? "STEP 1: FIELD VIEW" : "STEP 2: CROP VIEW", 
+                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 18)
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    isFieldView 
-                      ? "Hold horizontal. Fit the horizon in the box." 
-                      : "Get closer. Center a single leaf/stem in the box.",
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    textAlign: TextAlign.center,
+                      isFieldView 
+                        ? "Hold horizontal. Fit the horizon in the box." 
+                        : "Get closer. Center a single leaf/stem in the box.", 
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   FloatingActionButton(
-                    onPressed: _takePhoto,
+                    onPressed: _captureAndUpload,
                     backgroundColor: Colors.white,
                     child: _isProcessing 
-                      ? const CircularProgressIndicator() 
-                      : const Icon(Icons.camera, size: 32, color: Colors.black),
+                        ? const CircularProgressIndicator() 
+                        : const Icon(Icons.camera, size: 32, color: Colors.black),
                   ),
                 ],
               ),
@@ -159,41 +184,34 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
   }
 }
 
-// --- The Painter that darkens screen except for the hole ---
+// Visual helper to darken the screen except for the target area
 class HolePunchPainter extends CustomPainter {
   final Size holeSize;
   final double borderRadius;
-
   HolePunchPainter({required this.holeSize, required this.borderRadius});
-
+  
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black.withAlpha((0.6 * 255).round()); // Darken opacity
+    final paint = Paint()..color = Colors.black.withValues(alpha: 0.6); // Darken opacity
     
-    // Create a path for the whole screen
+    // Background (full screen)
     final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     
-    // Create a path for the hole in the center
-    final holeRect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height / 2),
-      width: holeSize.width,
-      height: holeSize.height,
-    );
+    // Hole (center)
+    final holeRect = Rect.fromCenter(center: Offset(size.width / 2, size.height / 2), width: holeSize.width, height: holeSize.height);
     final holePath = Path()..addRRect(RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)));
-
-    // Subtract hole from background
-    final finalPath = Path.combine(PathOperation.difference, backgroundPath, holePath);
     
+    // Cutout
+    final finalPath = Path.combine(PathOperation.difference, backgroundPath, holePath);
     canvas.drawPath(finalPath, paint);
-
-    // Optional: Draw a white border around the hole
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawRRect(RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)), borderPaint);
+    
+    // White Border
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius)), 
+        Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2
+    );
   }
-
+  
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

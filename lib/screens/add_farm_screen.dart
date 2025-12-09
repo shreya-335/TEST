@@ -248,7 +248,7 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                         }
 
                         return DropdownButtonFormField<String>(
-                          value: _selectedCropId,
+                          initialValue: _selectedCropId,
                           decoration: InputDecoration(
                             labelText: 'Select Crop',
                             filled: true,
